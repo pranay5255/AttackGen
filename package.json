@@ -8,9 +8,8 @@
   "scripts": {
     "build": "phat-fn build --experimentalAsync",
     "test": "tsx tests/test.ts",
-    "set-secrets": "tsx scripts/setSecrets.ts",
     "lint": "tsc --noEmit",
-    "publish-agent": "phat-fn build --experimentalAsync && tsx scripts/publish.ts"
+    "foundry:run": "tsx scripts/runFoundryTests.ts"
   },
   "devDependencies": {
     "@phala/fn": "^0.2.22",
@@ -29,7 +28,9 @@
     "openai": "^4.56.0",
     "pdf-parse": "^1.1.1",
     "pg": "^8.13.0",
-    "ts-node": "^10.9.2"
+    "react": "^19.2.0",
+    "tailwind": "^4.0.0",
+    "ts-node": "^10.9.2",
+    "vite": "^7.1.12"
   }
-  
 }
