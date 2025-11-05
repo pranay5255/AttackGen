@@ -1,8 +1,6 @@
 import os
 import json
-import openai
 import requests
-import os
 from openai import OpenAI
 import numpy as np
 from dotenv import load_dotenv
@@ -10,13 +8,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # Step 0: Load API keys from .env file
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')  # Load OpenAI API key
 ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY')  # Load Etherscan API key
 ETHERSCAN_BASE_URL = 'https://api.etherscan.io/api'
 
+# Initialize OpenRouter clients for embeddings and completions
+openrouter_embedding_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
+)
 
-client = OpenAI(
-    api_key=os.getenv('OPENAI_API_KEY'),
+openrouter_completion_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
 )
 
 # Function to load embeddings from a file (JSON format)
@@ -59,27 +62,14 @@ def get_smart_contract_source_code_and_abi(contract_address):
         raise Exception("Error fetching smart contract source code and ABI from Etherscan: " + result['message'])
 
 
-# Function to create embeddings using OpenAI's API
-def create_embeddings(text: str, api_key: str, model: str = 'text-embedding-ada-002') -> list:
-    url = "https://api.openai.com/v1/embeddings"
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "input": text[:7000],
-        "model": model
-    }
-    
-    response = requests.post(url, headers=headers, json=data)
-    
-    if response.status_code != 200:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-    
-    # Return the embeddings from the response
-    return response.json()['data'][0]['embedding']
+# Function to create embeddings using OpenRouter's API
+def create_embeddings(text: str, api_key: str = None, model: str = 'mistralai/codestral-embed-2505') -> list:
+    embedding = openrouter_embedding_client.embeddings.create(
+        model=model,
+        input=text[:7000],
+        encoding_format="float"
+    )
+    return embedding.data[0].embedding
 
 # Function to find the top k similar markdown chunks
 def find_top_similar_chunks(source_code_embedding, markdown_embeddings, top_k=2):
@@ -121,42 +111,32 @@ def create_final_prompt(query, top_chunks):
     relevant_text = "\n\n".join([f"File: {chunk['file']} (Chunk {chunk['chunk_index']}):\n{chunk['text']}" for chunk in top_chunks])
     return f"{query}\n\nRelevant Information from Markdown Files:\n{relevant_text}"
 
-# Function to generate response using OpenAI GPT model
-
-def generate_response(prompt):
+# Function to generate response using OpenRouter completions API
+def generate_response(prompt, model: str = 'minimax/minimax-m2:free'):
     """
-    Generate a response using RedPill's language model based on the final prompt.
+    Generate a response using OpenRouter's language model based on the final prompt.
     
     Parameters:
     - prompt: The input prompt for the generative model.
+    - model: The model to use for completions (default: minimax/minimax-m2:free).
 
     Returns:
     - Generated response from the model.
     """
     print("Prompt:\n", prompt)
     
-    url = "https://api.red-pill.ai/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer sk-QqGlrvZb8AkQunwXnmohAvWF2o5H8p4tOoLOWLwvXdMBOjK5"
-    }
-    data = {
-        "model": "claude-3-5-sonnet-20240620",
-        "messages": [
+    completion = openrouter_completion_client.chat.completions.create(
+        model=model,
+        messages=[
             {
                 "role": "user",
                 "content": prompt,
             }
         ],
-        "temperature": 1
-    }
+        temperature=1
+    )
     
-    response = requests.post(url, headers=headers, json=data)
-    
-    if response.status_code != 200:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-    
-    return response.json()['choices'][0]['message']['content'].strip()
+    return completion.choices[0].message.content.strip()
 
 
 # Example usage of the RAG pipeline
@@ -168,7 +148,7 @@ if __name__ == "__main__":
     # Retrieve smart contract source code and ABI from Etherscan
     contract_address = '0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3'  # Replace with the actual contract address
     source_code, abi = get_smart_contract_source_code_and_abi(contract_address)
-    source_code_embedding = create_embeddings(source_code, openai.api_key)
+    source_code_embedding = create_embeddings(source_code)
 
     # Find top 3 similar markdown chunks
     top_chunks = find_top_similar_chunks(source_code_embedding, markdown_embeddings)

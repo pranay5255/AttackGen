@@ -1,12 +1,17 @@
 import os
-import openai
 import json
 from dotenv import load_dotenv
 import tiktoken
-import requests
+from openai import OpenAI
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Initialize OpenRouter client for embeddings
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
+)
 
 # Initialize the tiktoken encoding for OpenAI's models
 encoding = tiktoken.get_encoding("cl100k_base")  # Use the correct encoding for your model
@@ -28,27 +33,14 @@ def split_markdown_file_by_tokens(file_path: str, max_tokens: int = 800) -> list
     
     return chunks
 
-# Function to create embeddings using OpenAI's API
-def create_embeddings(text: str, api_key: str, model: str = 'text-embedding-ada-002') -> list:
-    url = "https://api.openai.com/v1/embeddings"
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "input": text,
-        "model": model
-    }
-    
-    response = requests.post(url, headers=headers, json=data)
-    
-    if response.status_code != 200:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-    
-    # Return the embeddings from the response
-    return response.json()['data'][0]['embedding']
+# Function to create embeddings using OpenRouter's API
+def create_embeddings(text: str, api_key: str = None, model: str = 'mistralai/codestral-embed-2505') -> list:
+    embedding = openrouter_client.embeddings.create(
+        model=model,
+        input=text,
+        encoding_format="float"
+    )
+    return embedding.data[0].embedding
 
 # Function to process all Markdown files in a folder and save embeddings to a JSON file
 def process_markdown_files(folder_path: str, api_key: str, output_file: str):
@@ -62,7 +54,7 @@ def process_markdown_files(folder_path: str, api_key: str, output_file: str):
             chunks = split_markdown_file_by_tokens(file_path)
 
             for i, chunk_text in enumerate(chunks):
-                embeddings = create_embeddings(chunk_text, api_key)
+                embeddings = create_embeddings(chunk_text)
                 embeddings_data.append({
                     'file': filename,
                     'chunk_index': i,
@@ -80,16 +72,16 @@ def process_markdown_files(folder_path: str, api_key: str, output_file: str):
 def main():
     # Folder path and environment variables
     folder_path = '/home/pranay/Documents/ethglobal_singapore/LLMexperiments_ethglobal/ai-agent-template-openai/cyfrin-audit-reports/reports_md'
-    openai_api_key = os.getenv('OPENAI_API_KEY')
+    api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
     output_file = 'embeddings.json'
 
-    if not openai_api_key:
-        print('OpenAI API key is not set in the environment variables.')
+    if not api_key:
+        print('OpenRouter API key (OPENROUTER_API_KEY) or OpenAI API key (OPENAI_API_KEY) is not set in the environment variables.')
         return
 
     try:
         # Process all Markdown files in the folder and save embeddings to a JSON file
-        process_markdown_files(folder_path, openai_api_key, output_file)
+        process_markdown_files(folder_path, api_key, output_file)
         print('Process completed successfully.')
 
     except Exception as e:

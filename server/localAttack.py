@@ -1,15 +1,25 @@
 import requests
-import openai
 from dotenv import load_dotenv
 import os
 import json
 import numpy as np
+from openai import OpenAI
 
 # Load environment variables from .env file
 load_dotenv()
 # Get API keys from environment variables
 ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Initialize OpenRouter clients for embeddings and completions
+openrouter_embedding_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
+)
+
+openrouter_completion_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
+)
 
 
 # Function to query both smart contract source code and ABI from Etherscan
@@ -45,7 +55,7 @@ def get_relevant_chunks(contract_code: str, contract_abi: str, embeddings_file: 
     
     # Create embeddings for the contract code and ABI
     combined_text = contract_code + contract_abi
-    combined_embedding = create_embeddings(combined_text, OPENAI_API_KEY)
+    combined_embedding = create_embeddings(combined_text)
     
     # Calculate similarity with each chunk and sort by similarity
     similarities = []
@@ -60,30 +70,17 @@ def get_relevant_chunks(contract_code: str, contract_abi: str, embeddings_file: 
     
     return top_chunks
 
-# Function to create embeddings using OpenAI's API
-def create_embeddings(text: str, api_key: str, model: str = 'text-embedding-ada-002') -> list:
-    url = "https://api.openai.com/v1/embeddings"
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "input": text,
-        "model": model
-    }
-    
-    response = requests.post(url, headers=headers, json=data)
-    
-    if response.status_code != 200:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-    
-    # Return the embeddings from the response
-    return response.json()['data'][0]['embedding']
+# Function to create embeddings using OpenRouter's API
+def create_embeddings(text: str, api_key: str = None, model: str = 'mistralai/codestral-embed-2505') -> list:
+    embedding = openrouter_embedding_client.embeddings.create(
+        model=model,
+        input=text,
+        encoding_format="float"
+    )
+    return embedding.data[0].embedding
 
-# Function to send smart contract code and ABI to GPT-4 API for analysis or processing
-def query_gpt4(contract_code: str, contract_abi: str, relevant_chunks: list):
+# Function to send smart contract code and ABI to OpenRouter API for analysis or processing
+def query_gpt4(contract_code: str, contract_abi: str, relevant_chunks: list, model: str = 'minimax/minimax-m2:free'):
     relevant_texts = "\n\n".join([f"### Relevant Chunk {i+1}:\n{chunk[1]}" for i, chunk in enumerate(relevant_chunks)])
     print(relevant_texts)
     prompt = f"""
@@ -99,15 +96,15 @@ Analyze the following smart contract. Provide a detailed explanation of the cont
 {contract_code}
 
 """
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+    completion = openrouter_completion_client.chat.completions.create(
+        model=model,
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
     )
     
-    return response['choices'][0]['message']['content']
+    return completion.choices[0].message.content
 
 # Main function to fetch contract data (both code and ABI) and send them to GPT-4
 def main(contract_address: str):

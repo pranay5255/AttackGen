@@ -8,8 +8,15 @@ import requests
 from dotenv import load_dotenv
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from openai import OpenAI
 
 load_dotenv()
+
+# Initialize OpenRouter client for embeddings
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
+)
 
 app = FastAPI(title="AttackGen API", version="0.1.0")
 
@@ -24,7 +31,7 @@ app.add_middleware(
 
 class EmbedRequest(BaseModel):
     texts: List[str]
-    model: Optional[str] = 'text-embedding-ada-002'
+    model: Optional[str] = 'mistralai/codestral-embed-2505'
 
 
 class ContractAnalysisRequest(BaseModel):
@@ -34,20 +41,16 @@ class ContractAnalysisRequest(BaseModel):
     embeddingsFile: Optional[str] = 'embeddings.json'
 
 
-def create_embeddings(text: str, api_key: str, model: str = 'text-embedding-ada-002') -> List[float]:
-    url = "https://api.openai.com/v1/embeddings"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "input": text[:7000],
-        "model": model
-    }
-    resp = requests.post(url, headers=headers, json=data)
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    return resp.json()['data'][0]['embedding']
+def create_embeddings(text: str, api_key: str = None, model: str = 'mistralai/codestral-embed-2505') -> List[float]:
+    try:
+        embedding = openrouter_client.embeddings.create(
+            model=model,
+            input=text[:7000],
+            encoding_format="float"
+        )
+        return embedding.data[0].embedding
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def load_embeddings_from_file(input_file: str):
@@ -65,9 +68,9 @@ def health():
 
 @app.post("/embed")
 def embed(req: EmbedRequest):
-    api_key = os.getenv('OPENAI_API_KEY')
+    api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
     if not api_key:
-        raise HTTPException(status_code=500, detail='OPENAI_API_KEY not configured')
+        raise HTTPException(status_code=500, detail='OPENROUTER_API_KEY or OPENAI_API_KEY not configured')
     vectors = [create_embeddings(t, api_key, req.model) for t in req.texts]
     return {"embeddings": vectors}
 
@@ -87,9 +90,9 @@ def analyze_contract(req: ContractAnalysisRequest):
     if not src or not abi:
         raise HTTPException(status_code=400, detail='Missing source code or ABI from Etherscan')
 
-    api_key = os.getenv('OPENAI_API_KEY')
+    api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
     if not api_key:
-        raise HTTPException(status_code=500, detail='OPENAI_API_KEY not configured')
+        raise HTTPException(status_code=500, detail='OPENROUTER_API_KEY or OPENAI_API_KEY not configured')
     combined = src + abi
     combined_vec = np.array(create_embeddings(combined, api_key))
 

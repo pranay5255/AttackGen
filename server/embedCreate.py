@@ -1,15 +1,19 @@
 import os
 import json
-import openai
 import markdown
 import numpy as np
-import requests
 from pathlib import Path
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # Step 0: Load API keys from .env file
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')  # Load OpenAI API key
+
+# Initialize OpenRouter client for embeddings
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY'),
+)
 
 # Function to parse markdown files and split into chunks
 def parse_markdown_files(folder_path, chunk_size=300):
@@ -38,43 +42,30 @@ def parse_markdown_files(folder_path, chunk_size=300):
                 })
     return chunks
 
-# Function to create embeddings using OpenAI's API
-def create_embeddings(text: str, api_key: str, model: str = 'text-embedding-ada-002') -> list:
-    url = "https://api.openai.com/v1/embeddings"
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "input": text,
-        "model": model
-    }
-    
-    response = requests.post(url, headers=headers, json=data)
-    
-    if response.status_code != 200:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-    
-    # Return the embeddings from the response
-    return response.json()['data'][0]['embedding']
+# Function to create embeddings using OpenRouter's API
+def create_embeddings(text: str, api_key: str = None, model: str = 'mistralai/codestral-embed-2505') -> list:
+    embedding = openrouter_client.embeddings.create(
+        model=model,
+        input=text,
+        encoding_format="float"
+    )
+    return embedding.data[0].embedding
 
 # Function to create embeddings for markdown chunks
-def create_embeddings_for_chunks(chunks, api_key):
+def create_embeddings_for_chunks(chunks, api_key=None):
     """
-    Create embeddings for each chunk of markdown content using OpenAI embeddings API.
+    Create embeddings for each chunk of markdown content using OpenRouter embeddings API.
     
     Parameters:
     - chunks: List of dictionaries with chunked text data.
-    - api_key: OpenAI API key.
+    - api_key: OpenRouter API key (optional, uses client default if not provided).
 
     Returns:
     - List of embeddings and corresponding chunk metadata.
     """
     embeddings = []
     for chunk in chunks:
-        embedding = create_embeddings(chunk['text'], api_key)
+        embedding = create_embeddings(chunk['text'])
         embeddings.append({
             "file": chunk['file'],
             "chunk_index": chunk['chunk_index'],
@@ -104,7 +95,7 @@ if __name__ == "__main__":
     markdown_chunks = parse_markdown_files(markdown_folder)
 
     # Step 2: Create embeddings for markdown chunks
-    markdown_embeddings = create_embeddings_for_chunks(markdown_chunks, openai.api_key)
+    markdown_embeddings = create_embeddings_for_chunks(markdown_chunks)
 
     # Save the embeddings to a JSON file
     save_embeddings_to_file(markdown_embeddings, output_file)
