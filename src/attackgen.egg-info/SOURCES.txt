@@ -1,0 +1,6 @@
+README.md
+pyproject.toml
+src/attackgen.egg-info/PKG-INFO
+src/attackgen.egg-info/SOURCES.txt
+src/attackgen.egg-info/dependency_links.txt
+src/attackgen.egg-info/top_level.txt
