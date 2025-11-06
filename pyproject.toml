@@ -1,14 +1,32 @@
+[new_content]
 [project]
 name = "attackgen"
 version = "0.1.0"
-description = "Add your description here"
+description = "AttackGen - Smart contract security analysis tool with OCR and embeddings"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    # Core dependencies
     "dotenv>=0.9.9",
     "markdown>=3.10",
     "numpy>=2.3.4",
     "openai>=2.7.1",
     "scikit-learn>=1.7.2",
     "tiktoken>=0.12.0",
+    
+    # OCR and PDF processing dependencies
+    "transformers>=4.44.0",
+    "torch>=2.3.0",
+    "torchvision>=0.18.0",
+    "pdf2image>=1.17.0",
+    "Pillow>=10.0.0",
+    "poppler-utils",
+    
+    # HuggingFace dependencies
+    "huggingface-hub>=0.25.0",
+    
+    # Additional utilities
+    "requests>=2.32.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
