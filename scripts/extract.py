@@ -13,6 +13,16 @@ import os
 import sys
 from pathlib import Path
 import tempfile
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Set HuggingFace token if available
+hf_token = os.getenv('HF_TOKEN')
+if hf_token:
+    os.environ['HUGGINGFACE_HUB_TOKEN'] = hf_token
+    print(f"HuggingFace token configured")
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -298,4 +308,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
