@@ -16,7 +16,7 @@ openrouter_client = OpenAI(
 )
 
 # Function to parse markdown files and split into chunks
-def parse_markdown_files(folder_path, chunk_size=300):
+def parse_markdown_files(folder_path, chunk_size=100):
     """
     Parse all markdown files in a folder and return their content as chunks.
     
