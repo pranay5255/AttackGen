@@ -1,0 +1,17 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "frame": {
+    "version": "1",
+    "name": "YudaiV4",
+    "iconUrl": "https://your-domain.example/icon.png",
+    "homeUrl": "https://your-domain.example",
+    "imageUrl": "https://your-domain.example/og.png",
+    "buttonTitle": "Launch YudaiV4",
+    "splashImageUrl": "https://your-domain.example/splash.png",
+    "splashBackgroundColor": "#f6f0e8"
+  }
+}
